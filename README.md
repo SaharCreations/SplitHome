@@ -2,8 +2,18 @@
 
 SplitHome is a focused shared-household expense app built with **Java 17 + Spring Boot**. It answers one question well: **who owes whom, and which specific shared expenses have actually been settled?**
 
+![SplitHome Dashboard](screenshots/dashboard.png)
+
 ## Why Java / Spring Boot
 The app deliberately puts the business rules on the backend: exact-cent splitting, balance calculation, pairwise debt calculation, settlement validation, household isolation, persistence, and paginated expense retrieval. Spring Boot provides a clean REST/service/repository structure and JPA/Hibernate persistence.
+
+## Screenshots
+
+### Add an expense
+![Add Expense](screenshots/add-expense.png)
+
+### Manage homes
+![Manage Homes](screenshots/manage-homes.png)
 
 ## Features
 - Multiple independent homes
