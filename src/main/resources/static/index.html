@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SplitHome — Shared expenses, simplified</title>
+  <meta name="description" content="A simple household expense splitter built with Java and Spring Boot.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="SplitHome home">
+        <span class="brand-mark">S</span>
+        <span>SplitHome</span>
+      </a>
+      <div class="top-actions">
+        <select id="householdSelect" aria-label="Choose household"></select>
+        <button class="btn btn-secondary" id="newHomeBtn" type="button">New home</button>
+        <button class="btn btn-danger" id="deleteHomeBtn" type="button">Delete home</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="emptyState" class="hero empty-state hidden">
+        <div>
+          <span class="eyebrow">Shared expenses without the spreadsheet</span>
+          <h1>Know who owes whom.</h1>
+          <p>Create a home, add the people you live with, and SplitHome keeps the math clean.</p>
+          <button class="btn btn-primary" id="emptyCreateBtn" type="button">Create your home</button>
+        </div>
+        <div class="balance-preview" aria-hidden="true">
+          <div class="mini-note note-a">Groceries<br><strong>$84.00</strong></div>
+          <div class="mini-arrow">→</div>
+          <div class="mini-note note-b">Maya owes Noor<br><strong>$28.00</strong></div>
+        </div>
+      </section>
+
+      <section id="appView" class="hidden">
+        <div class="hero compact-hero">
+          <div>
+            <span class="eyebrow">Your shared home</span>
+            <h1 id="homeName">SplitHome</h1>
+            <p>One place for shared expenses. No budgeting features. No clutter.</p>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-secondary" id="addPersonBtn" type="button">+ Person</button>
+            <button class="btn btn-primary" id="addExpenseBtn" type="button">+ Expense</button>
+          </div>
+        </div>
+
+        <section class="stats-grid" aria-label="Household summary">
+          <article class="stat-card">
+            <span>Total spent</span>
+            <strong id="totalSpent">$0.00</strong>
+            <small>Across all shared expenses</small>
+          </article>
+          <article class="stat-card">
+            <span>People</span>
+            <strong id="memberCount">0</strong>
+            <small>In this home</small>
+          </article>
+          <article class="stat-card accent-card">
+            <span>Open balances</span>
+            <strong id="openBalanceCount">0</strong>
+            <small>Payments needed to settle up</small>
+          </article>
+        </section>
+
+        <div class="content-grid">
+          <section class="panel owes-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">The answer you came for</span>
+                <h2>Who owes whom</h2>
+              </div>
+              <button class="text-button" id="settleBtn" type="button">Record payment</button>
+            </div>
+            <div id="debtList" class="debt-list"></div>
+          </section>
+
+          <aside class="panel people-panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Household</span>
+                <h2>People</h2>
+              </div>
+            </div>
+            <div id="peopleList" class="people-list"></div>
+          </aside>
+        </div>
+
+        <section class="panel expenses-panel">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Recent activity</span>
+              <h2>Expenses</h2>
+            </div>
+            <label class="search-wrap">
+              <span class="sr-only">Search expenses</span>
+              <input id="expenseSearch" type="search" placeholder="Search expenses">
+            </label>
+          </div>
+          <div id="expenseList" class="expense-list"></div>
+          <div id="expenseListFooter" class="expense-list-footer hidden">
+            <span id="expenseListCount"></span>
+            <button id="showMoreExpensesBtn" class="btn btn-secondary" type="button">Show more</button>
+          </div>
+        </section>
+
+        <section class="panel payments-panel">
+          <div class="section-heading">
+            <div>
+              <span class="eyebrow">Corrections stay possible</span>
+              <h2>Payments</h2>
+            </div>
+          </div>
+          <div id="paymentList" class="payment-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="homeDialog" class="modal">
+    <form method="dialog" id="homeForm" class="modal-card">
+      <div class="modal-head"><div><span class="eyebrow">Start simple</span><h2>Create a home</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <label>Home name<input id="homeNameInput" required maxlength="100" placeholder="e.g. Lakewood Apartment"></label>
+      <p class="form-error hidden" id="homeError" role="alert" aria-live="assertive"></p>
+      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveHomeBtn" type="button">Create home</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="personDialog" class="modal">
+    <form method="dialog" id="personForm" class="modal-card">
+      <div class="modal-head"><div><span class="eyebrow">Household member</span><h2>Add a person</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <label>Name<input id="personNameInput" required maxlength="80" placeholder="Their name"></label>
+      <p class="form-error hidden" id="personError" role="alert" aria-live="assertive"></p>
+      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="savePersonBtn" type="button">Add person</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="expenseDialog" class="modal">
+    <form method="dialog" id="expenseForm" class="modal-card wide-card">
+      <div class="modal-head"><div><span class="eyebrow">Shared purchase</span><h2>Add expense</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <div class="form-grid">
+        <label class="span-2">What was it?<input id="expenseDescription" required maxlength="120" placeholder="Groceries, internet, cleaning supplies..."></label>
+        <label>Amount<input id="expenseAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
+        <label>Who paid?<select id="paidBySelect" required></select></label>
+      </div>
+      <fieldset>
+        <legend>Who should share this expense?</legend>
+        <div id="participantChecks" class="check-grid"></div>
+      </fieldset>
+      <p class="helper">SplitHome divides the amount equally and handles leftover cents exactly.</p>
+      <p class="form-error hidden" id="expenseError" role="alert" aria-live="assertive"></p>
+      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveExpenseBtn" type="button">Add expense</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="settleDialog" class="modal">
+    <form method="dialog" id="settleForm" class="modal-card">
+      <div class="modal-head"><div><span class="eyebrow">Settle up</span><h2>Record a payment</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <label>Who paid?<select id="fromMemberSelect" required></select></label>
+      <label>Who received it?<select id="toMemberSelect" required></select></label>
+      <label>Amount<input id="settlementAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
+      <p class="form-error hidden" id="settleError" role="alert" aria-live="assertive"></p>
+      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveSettlementBtn" type="button">Record payment</button></div>
+    </form>
+  </dialog>
+
+
+  <dialog id="editPaymentDialog" class="modal">
+    <form method="dialog" id="editPaymentForm" class="modal-card">
+      <div class="modal-head"><div><span class="eyebrow">Correct a payment</span><h2>Edit payment</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <p class="helper" id="editPaymentSummary"></p>
+      <label>Amount<input id="editPaymentAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
+      <p class="form-error hidden" id="editPaymentError" role="alert" aria-live="assertive"></p>
+      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="savePaymentEditBtn" type="button">Save correction</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/js/app.js"></script>
+</body>
+</html>
