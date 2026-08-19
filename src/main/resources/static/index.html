@@ -15,9 +15,8 @@
         <span>SplitHome</span>
       </a>
       <div class="top-actions">
-        <select id="householdSelect" aria-label="Choose household"></select>
-        <button class="btn btn-secondary" id="newHomeBtn" type="button">New home</button>
-        <button class="btn btn-danger" id="deleteHomeBtn" type="button">Delete home</button>
+        <select id="householdSelect" class="sr-only" aria-label="Choose household"></select>
+        <button class="btn btn-manage-home" id="manageHomeBtn" type="button">Manage home</button>
       </div>
     </header>
 
@@ -121,27 +120,42 @@
     </main>
   </div>
 
+  <dialog id="manageHomeDialog" class="modal">
+    <div class="modal-card manage-home-card">
+      <div class="modal-head">
+        <div><span class="eyebrow">Your spaces</span><h2>Manage homes</h2></div>
+        <button class="icon-btn dialog-cancel" type="button" aria-label="Close">×</button>
+      </div>
+      <p class="helper">Switch homes, create a new one, or remove a home you no longer need.</p>
+      <div id="manageHomeList" class="manage-home-list"></div>
+      <div class="modal-actions manage-home-actions">
+        <button class="btn btn-secondary dialog-cancel" type="button">Done</button>
+        <button class="btn btn-primary" id="newHomeFromManagerBtn" type="button">+ New home</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="homeDialog" class="modal">
     <form method="dialog" id="homeForm" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow">Start simple</span><h2>Create a home</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">Start simple</span><h2>Create a home</h2></div><button class="icon-btn dialog-cancel" type="button" aria-label="Close">×</button></div>
       <label>Home name<input id="homeNameInput" required maxlength="100" placeholder="e.g. Lakewood Apartment"></label>
       <p class="form-error hidden" id="homeError" role="alert" aria-live="assertive"></p>
-      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveHomeBtn" type="button">Create home</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary dialog-cancel" type="button">Cancel</button><button class="btn btn-primary" id="saveHomeBtn" type="button">Create home</button></div>
     </form>
   </dialog>
 
   <dialog id="personDialog" class="modal">
     <form method="dialog" id="personForm" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow">Household member</span><h2>Add a person</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">Household member</span><h2>Add a person</h2></div><button class="icon-btn dialog-cancel" type="button" aria-label="Close">×</button></div>
       <label>Name<input id="personNameInput" required maxlength="80" placeholder="Their name"></label>
       <p class="form-error hidden" id="personError" role="alert" aria-live="assertive"></p>
-      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="savePersonBtn" type="button">Add person</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary dialog-cancel" type="button">Cancel</button><button class="btn btn-primary" id="savePersonBtn" type="button">Add person</button></div>
     </form>
   </dialog>
 
   <dialog id="expenseDialog" class="modal">
     <form method="dialog" id="expenseForm" class="modal-card wide-card">
-      <div class="modal-head"><div><span class="eyebrow">Shared purchase</span><h2>Add expense</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">Shared purchase</span><h2>Add expense</h2></div><button class="icon-btn dialog-cancel" type="button" aria-label="Close">×</button></div>
       <div class="form-grid">
         <label class="span-2">What was it?<input id="expenseDescription" required maxlength="120" placeholder="Groceries, internet, cleaning supplies..."></label>
         <label>Amount<input id="expenseAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
@@ -153,30 +167,57 @@
       </fieldset>
       <p class="helper">SplitHome divides the amount equally and handles leftover cents exactly.</p>
       <p class="form-error hidden" id="expenseError" role="alert" aria-live="assertive"></p>
-      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveExpenseBtn" type="button">Add expense</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary dialog-cancel" type="button">Cancel</button><button class="btn btn-primary" id="saveExpenseBtn" type="button">Add expense</button></div>
     </form>
   </dialog>
 
   <dialog id="settleDialog" class="modal">
     <form method="dialog" id="settleForm" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow">Settle up</span><h2>Record a payment</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">Settle up</span><h2>Record a payment</h2></div><button class="icon-btn dialog-cancel" type="button" aria-label="Close">×</button></div>
       <label>Who paid?<select id="fromMemberSelect" required></select></label>
       <label>Who received it?<select id="toMemberSelect" required></select></label>
       <label>Amount<input id="settlementAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
       <p class="form-error hidden" id="settleError" role="alert" aria-live="assertive"></p>
-      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveSettlementBtn" type="button">Record payment</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary dialog-cancel" type="button">Cancel</button><button class="btn btn-primary" id="saveSettlementBtn" type="button">Record payment</button></div>
     </form>
   </dialog>
 
 
   <dialog id="editPaymentDialog" class="modal">
     <form method="dialog" id="editPaymentForm" class="modal-card">
-      <div class="modal-head"><div><span class="eyebrow">Correct a payment</span><h2>Edit payment</h2></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">Correct a payment</span><h2>Edit payment</h2></div><button class="icon-btn dialog-cancel" type="button" aria-label="Close">×</button></div>
       <p class="helper" id="editPaymentSummary"></p>
       <label>Amount<input id="editPaymentAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
       <p class="form-error hidden" id="editPaymentError" role="alert" aria-live="assertive"></p>
-      <div class="modal-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="savePaymentEditBtn" type="button">Save correction</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary dialog-cancel" type="button">Cancel</button><button class="btn btn-primary" id="savePaymentEditBtn" type="button">Save correction</button></div>
     </form>
+  </dialog>
+
+  <dialog id="confirmDialog" class="modal notification-dialog" data-managed-dialog>
+    <div class="modal-card notification-card">
+      <div class="modal-head">
+        <div><span class="eyebrow">Please confirm</span><h2 id="confirmTitle">Confirm action</h2></div>
+        <button class="icon-btn" id="confirmCloseBtn" type="button" aria-label="Close">×</button>
+      </div>
+      <p id="confirmMessage" class="notification-message"></p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="confirmCancelBtn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="confirmActionBtn" type="button">Confirm</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="noticeDialog" class="modal notification-dialog" data-managed-dialog>
+    <div class="modal-card notification-card">
+      <div class="modal-head">
+        <div><span class="eyebrow">SplitHome</span><h2 id="noticeTitle">Notice</h2></div>
+        <button class="icon-btn" id="noticeCloseBtn" type="button" aria-label="Close">×</button>
+      </div>
+      <p id="noticeMessage" class="notification-message"></p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="noticeDoneBtn" type="button">Got it</button>
+      </div>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

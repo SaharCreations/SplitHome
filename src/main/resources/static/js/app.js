@@ -1,6 +1,7 @@
 const $ = (s) => document.querySelector(s);
 let currentHouseholdId = null;
 let dashboard = null;
+let households = [];
 let editingSettlementId = null;
 const EXPENSE_PAGE_SIZE = 20;
 let expenseItems = [];
@@ -46,6 +47,57 @@ function clearFormError(id) {
   el.classList.add('hidden');
 }
 
+function confirmAction({ title, message, confirmLabel = 'Confirm', danger = false }) {
+  return new Promise(resolve => {
+    const dialog = $('#confirmDialog');
+    const titleEl = $('#confirmTitle');
+    const messageEl = $('#confirmMessage');
+    const confirmBtn = $('#confirmActionBtn');
+    const cancelBtn = $('#confirmCancelBtn');
+    const closeBtn = $('#confirmCloseBtn');
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmLabel;
+    confirmBtn.classList.toggle('btn-danger-solid', danger);
+    confirmBtn.classList.toggle('btn-primary', !danger);
+
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (dialog.open) dialog.close();
+      resolve(value);
+    };
+    const onCancel = () => finish(false);
+    const onConfirm = () => finish(true);
+    const onBackdrop = event => { if (event.target === dialog) finish(false); };
+    const onNativeCancel = event => { event.preventDefault(); finish(false); };
+    const cleanup = () => {
+      cancelBtn.removeEventListener('click', onCancel);
+      closeBtn.removeEventListener('click', onCancel);
+      confirmBtn.removeEventListener('click', onConfirm);
+      dialog.removeEventListener('click', onBackdrop);
+      dialog.removeEventListener('cancel', onNativeCancel);
+    };
+
+    cancelBtn.addEventListener('click', onCancel);
+    closeBtn.addEventListener('click', onCancel);
+    confirmBtn.addEventListener('click', onConfirm);
+    dialog.addEventListener('click', onBackdrop);
+    dialog.addEventListener('cancel', onNativeCancel);
+    dialog.showModal();
+  });
+}
+
+function showNotice(title, message) {
+  const dialog = $('#noticeDialog');
+  $('#noticeTitle').textContent = title;
+  $('#noticeMessage').textContent = message;
+  dialog.showModal();
+}
+
 function validPositiveMoneyInput(input) {
   const raw = input.value.trim();
   const amount = Number(raw);
@@ -54,6 +106,7 @@ function validPositiveMoneyInput(input) {
 
 async function loadHouseholds(preferredId = null) {
   const homes = await api('/api/households');
+  households = homes;
   const select = $('#householdSelect');
   select.innerHTML = '';
   if (!homes.length) {
@@ -62,16 +115,49 @@ async function loadHouseholds(preferredId = null) {
     currentHouseholdId = null;
     $('#emptyState').classList.remove('hidden');
     $('#appView').classList.add('hidden');
-    $('#deleteHomeBtn').disabled = true;
+    renderManageHomes();
     return;
   }
   select.disabled = false;
-  $('#deleteHomeBtn').disabled = false;
   homes.forEach(h => select.add(new Option(h.name, h.id)));
   currentHouseholdId = preferredId || currentHouseholdId || homes[0].id;
   if (!homes.some(h => String(h.id) === String(currentHouseholdId))) currentHouseholdId = homes[0].id;
   select.value = currentHouseholdId;
+  renderManageHomes();
   await loadDashboard();
+}
+
+function renderManageHomes() {
+  const list = $('#manageHomeList');
+  if (!list) return;
+  if (!households.length) {
+    list.innerHTML = '<div class="manage-home-empty"><strong>No homes yet.</strong><span>Create your first home to get started.</span></div>';
+    return;
+  }
+  list.innerHTML = households.map(home => {
+    const active = String(home.id) === String(currentHouseholdId);
+    return `<article class="manage-home-row ${active ? 'active' : ''}">
+      <button class="manage-home-open" type="button" data-open-home="${home.id}">
+        <span class="manage-home-icon">⌂</span>
+        <span><strong>${escapeHtml(home.name)}</strong><small>${active ? 'Current home' : 'Open this home'}</small></span>
+      </button>
+      <button class="manage-home-delete" type="button" data-delete-home="${home.id}" aria-label="Delete ${escapeHtml(home.name)}">Delete</button>
+    </article>`;
+  }).join('');
+
+  list.querySelectorAll('[data-open-home]').forEach(btn => btn.addEventListener('click', async () => {
+    currentHouseholdId = Number(btn.dataset.openHome);
+    $('#householdSelect').value = currentHouseholdId;
+    $('#manageHomeDialog').close();
+    await loadDashboard();
+    renderManageHomes();
+  }));
+  list.querySelectorAll('[data-delete-home]').forEach(btn => btn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    const id = Number(btn.dataset.deleteHome);
+    const home = households.find(h => Number(h.id) === id);
+    if (home) await deleteHomeById(id, home.name);
+  }));
 }
 
 async function loadDashboard() {
@@ -109,13 +195,38 @@ function renderPeople() {
 }
 
 function renderDebts() {
-  $('#debtList').innerHTML = dashboard.debts.length ? dashboard.debts.map(d => `
-    <article class="debt-card">
-      <div class="person-chip"><span class="avatar">${initials(d.fromMemberName)}</span><span>${escapeHtml(d.fromMemberName)}</span></div>
-      <span class="debt-arrow">owes</span>
-      <div class="person-chip"><span class="avatar">${initials(d.toMemberName)}</span><span>${escapeHtml(d.toMemberName)}</span></div>
-      <strong class="debt-amount">${money(d.amount)}</strong>
-    </article>`).join('') : '<div class="all-set"><strong>All settled.</strong>No one owes anyone right now.</div>';
+  if (!dashboard.debts.length) {
+    $('#debtList').innerHTML = '<div class="all-set"><strong>All settled.</strong>No one owes anyone right now.</div>';
+    return;
+  }
+
+  const grouped = new Map();
+  dashboard.debts.forEach(debt => {
+    const key = String(debt.fromMemberId ?? debt.fromMemberName);
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        memberId: debt.fromMemberId,
+        memberName: debt.fromMemberName,
+        debts: []
+      });
+    }
+    grouped.get(key).debts.push(debt);
+  });
+
+  $('#debtList').innerHTML = [...grouped.values()].map(group => `
+    <article class="debtor-row">
+      <div class="debtor-person">
+        <span class="avatar">${initials(group.memberName)}</span>
+        <span class="debtor-name">${escapeHtml(group.memberName)}</span>
+      </div>
+      <div class="creditor-list" aria-label="People ${escapeHtml(group.memberName)} owes">
+        ${group.debts.map(debt => `
+          <div class="creditor-item">
+            <span class="creditor-label">owes <strong>${escapeHtml(debt.toMemberName)}</strong></span>
+            <strong class="debt-amount">${money(debt.amount)}</strong>
+          </div>`).join('')}
+      </div>
+    </article>`).join('');
 }
 
 async function loadExpenses(reset = true) {
@@ -229,12 +340,12 @@ async function removeMember(id) {
     toast(`${member.name} must be settled before they can be removed.`);
     return;
   }
-  if (!confirm(`Remove ${member.name} from this home? Their name will stay on old expense and payment history.`)) return;
+  if (!await confirmAction({ title: `Remove ${member.name}?`, message: 'Their name will stay on old expense and payment history.', confirmLabel: 'Remove person', danger: true })) return;
   try {
     await api(`/api/households/${currentHouseholdId}/members/${id}`, { method:'DELETE' });
     await loadDashboard();
     toast(`${member.name} removed.`);
-  } catch (e) { toast(e.message); }
+  } catch (e) { showNotice('Couldn’t complete that', e.message); }
 }
 
 async function addExpense() {
@@ -277,12 +388,12 @@ async function settleExpenseShare(expenseId, memberId) {
   const expense = expenseItems.find(e => String(e.id) === String(expenseId));
   const share = expense?.shares.find(s => String(s.memberId) === String(memberId));
   if (!expense || !share) return;
-  if (!confirm(`Settle ${share.memberName}'s remaining ${money(share.remainingAmount)} for "${expense.description}"?`)) return;
+  if (!await confirmAction({ title: `Settle ${share.memberName}?`, message: `Record ${money(share.remainingAmount)} as settled for “${expense.description}”?`, confirmLabel: 'Settle expense' })) return;
   try {
     await api(`/api/households/${currentHouseholdId}/expenses/${expenseId}/shares/${memberId}/settle`, { method:'POST' });
     await loadDashboard();
     toast(`${expense.description} settled for ${share.memberName}.`);
-  } catch (e) { toast(e.message); }
+  } catch (e) { showNotice('Couldn’t complete that', e.message); }
 }
 
 function openEditPayment(id) {
@@ -315,37 +426,42 @@ async function deletePayment(id) {
   const payment = dashboard.settlements.find(p => String(p.id) === String(id));
   if (!payment) return;
   const detail = payment.expenseId ? ` for "${payment.expenseDescription}"` : '';
-  if (!confirm(`Delete ${money(payment.amount)} payment from ${payment.fromMemberName} to ${payment.toMemberName}${detail}?`)) return;
+  if (!await confirmAction({ title: 'Delete payment?', message: `${money(payment.amount)} from ${payment.fromMemberName} to ${payment.toMemberName}${detail} will be removed and balances recalculated.`, confirmLabel: 'Delete payment', danger: true })) return;
   try {
     await api(`/api/households/${currentHouseholdId}/settlements/${id}`, { method:'DELETE' });
     await loadDashboard();
     toast('Payment deleted.');
-  } catch (e) { toast(e.message); }
+  } catch (e) { showNotice('Couldn’t complete that', e.message); }
 }
 
 async function deleteExpense(id) {
-  if (!confirm('Delete this expense? Any payments tied specifically to it will also be deleted and balances will be recalculated.')) return;
+  if (!await confirmAction({ title: 'Delete this expense?', message: 'Any payments tied specifically to it will also be deleted and balances will be recalculated.', confirmLabel: 'Delete expense', danger: true })) return;
   try {
     await api(`/api/households/${currentHouseholdId}/expenses/${id}`, { method:'DELETE' });
     await loadDashboard(); toast('Expense deleted.');
-  } catch (e) { toast(e.message); }
+  } catch (e) { showNotice('Couldn’t complete that', e.message); }
+}
+
+async function deleteHomeById(id, name) {
+  if (!id) return;
+  if (!await confirmAction({ title: `Delete “${name}”?`, message: 'This permanently deletes this home, its people, expenses, settlements, and payment history. This cannot be undone.', confirmLabel: 'Delete home', danger: true })) return;
+  try {
+    await api(`/api/households/${id}`, { method:'DELETE' });
+    if (String(currentHouseholdId) === String(id)) currentHouseholdId = null;
+    await loadHouseholds();
+    renderManageHomes();
+    toast('Home deleted.');
+  } catch (e) { showNotice('Couldn’t complete that', e.message); }
 }
 
 async function deleteCurrentHome() {
   if (!currentHouseholdId || !dashboard) return;
-  const name = dashboard.household.name;
-  if (!confirm(`Delete "${name}"? This permanently deletes its people, expenses, settlements, and payment history.`)) return;
-  if (!confirm(`Final confirmation: permanently delete "${name}"?`)) return;
-  try {
-    await api(`/api/households/${currentHouseholdId}`, { method:'DELETE' });
-    currentHouseholdId = null;
-    await loadHouseholds();
-    toast('Home deleted.');
-  } catch (e) { toast(e.message); }
+  return deleteHomeById(currentHouseholdId, dashboard.household.name);
 }
 
-$('#deleteHomeBtn').addEventListener('click', deleteCurrentHome);
-$('#newHomeBtn').addEventListener('click', () => { clearFormError('#homeError'); $('#homeDialog').showModal(); });
+
+$('#manageHomeBtn').addEventListener('click', () => { renderManageHomes(); $('#manageHomeDialog').showModal(); });
+$('#newHomeFromManagerBtn').addEventListener('click', () => { $('#manageHomeDialog').close(); clearFormError('#homeError'); $('#homeDialog').showModal(); });
 $('#emptyCreateBtn').addEventListener('click', () => { clearFormError('#homeError'); $('#homeDialog').showModal(); });
 $('#addPersonBtn').addEventListener('click', () => { clearFormError('#personError'); $('#personDialog').showModal(); });
 $('#addExpenseBtn').addEventListener('click', () => { clearFormError('#expenseError'); dashboard.members.length ? $('#expenseDialog').showModal() : toast('Add a person first.'); });
@@ -359,4 +475,32 @@ $('#expenseSearch').addEventListener('input', () => { clearTimeout(expenseSearch
 $('#showMoreExpensesBtn').addEventListener('click', async () => { if (!expenseHasNext) return; expensePage += 1; try { await loadExpenses(false); } catch (e) { expensePage -= 1; toast(e.message); } });
 $('#householdSelect').addEventListener('change', async (e) => { currentHouseholdId = Number(e.target.value); await loadDashboard(); });
 
-loadHouseholds().catch(e => toast(e.message));
+$('#noticeCloseBtn').addEventListener('click', () => $('#noticeDialog').close());
+$('#noticeDoneBtn').addEventListener('click', () => $('#noticeDialog').close());
+$('#noticeDialog').addEventListener('click', event => { if (event.target === $('#noticeDialog')) $('#noticeDialog').close(); });
+
+loadHouseholds().catch(e => showNotice('Couldn’t load SplitHome', e.message));
+
+// Dialogs: close controls must never trigger form validation.
+document.querySelectorAll('dialog:not([data-managed-dialog])').forEach(dialog => {
+  dialog.querySelectorAll('.dialog-cancel').forEach(button => {
+    button.addEventListener('click', () => {
+      dialog.close();
+      const form = dialog.querySelector('form');
+      if (form) form.reset();
+      dialog.querySelectorAll('.form-error').forEach(error => {
+        error.textContent = '';
+        error.classList.add('hidden');
+      });
+    });
+  });
+
+  // Clicking the backdrop closes the dialog without submitting/validating.
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) {
+      dialog.close();
+      const form = dialog.querySelector('form');
+      if (form) form.reset();
+    }
+  });
+});

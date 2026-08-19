@@ -235,7 +235,7 @@ public class SplitHomeService {
                 .map(e -> new BalanceDto(e.getKey(), memberMap.get(e.getKey()).getName(), money(e.getValue())))
                 .toList();
 
-        List<DebtDto> debts = simplifyDebts(balanceDtos);
+        List<DebtDto> debts = directDebts(shares, settlements);
         BigDecimal totalSpent = expenses.stream().map(Expense::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return new DashboardDto(
@@ -261,37 +261,61 @@ public class SplitHomeService {
         return result;
     }
 
-    public List<DebtDto> simplifyDebts(List<BalanceDto> balances) {
-        record Node(Long id, String name, long cents) {}
-        List<Node> creditors = new ArrayList<>();
-        List<Node> debtors = new ArrayList<>();
+    public List<DebtDto> netDirectDebts(List<DebtDto> obligations, List<DebtDto> payments) {
+        record DirectedPair(Long from, Long to) {}
+        record UnorderedPair(Long a, Long b) {}
 
-        for (BalanceDto b : balances) {
-            long cents = money(b.balance()).movePointRight(2).longValue();
-            if (cents > 0) creditors.add(new Node(b.memberId(), b.memberName(), cents));
-            if (cents < 0) debtors.add(new Node(b.memberId(), b.memberName(), -cents));
+        Map<DirectedPair, BigDecimal> directed = new HashMap<>();
+        Map<Long, String> names = new HashMap<>();
+
+        for (DebtDto d : obligations) {
+            names.put(d.fromMemberId(), d.fromMemberName());
+            names.put(d.toMemberId(), d.toMemberName());
+            directed.merge(new DirectedPair(d.fromMemberId(), d.toMemberId()), money(d.amount()), BigDecimal::add);
+        }
+        for (DebtDto p : payments) {
+            names.put(p.fromMemberId(), p.fromMemberName());
+            names.put(p.toMemberId(), p.toMemberName());
+            directed.merge(new DirectedPair(p.fromMemberId(), p.toMemberId()), money(p.amount()).negate(), BigDecimal::add);
         }
 
-        creditors.sort(Comparator.comparingLong(Node::cents).reversed());
-        debtors.sort(Comparator.comparingLong(Node::cents).reversed());
+        Set<UnorderedPair> pairs = new LinkedHashSet<>();
+        for (DirectedPair p : directed.keySet()) {
+            long a = Math.min(p.from(), p.to());
+            long b = Math.max(p.from(), p.to());
+            if (a != b) pairs.add(new UnorderedPair(a, b));
+        }
+
         List<DebtDto> result = new ArrayList<>();
-        int ci = 0, di = 0;
-
-        while (ci < creditors.size() && di < debtors.size()) {
-            Node c = creditors.get(ci);
-            Node d = debtors.get(di);
-            long paid = Math.min(c.cents(), d.cents());
-            if (paid > 0) {
-                result.add(new DebtDto(d.id(), d.name(), c.id(), c.name(), BigDecimal.valueOf(paid, 2)));
+        for (UnorderedPair pair : pairs) {
+            BigDecimal aToB = directed.getOrDefault(new DirectedPair(pair.a(), pair.b()), BigDecimal.ZERO);
+            BigDecimal bToA = directed.getOrDefault(new DirectedPair(pair.b(), pair.a()), BigDecimal.ZERO);
+            BigDecimal net = money(aToB.subtract(bToA));
+            if (net.compareTo(BigDecimal.ZERO) > 0) {
+                result.add(new DebtDto(pair.a(), names.get(pair.a()), pair.b(), names.get(pair.b()), net));
+            } else if (net.compareTo(BigDecimal.ZERO) < 0) {
+                result.add(new DebtDto(pair.b(), names.get(pair.b()), pair.a(), names.get(pair.a()), net.abs()));
             }
-            long cLeft = c.cents() - paid;
-            long dLeft = d.cents() - paid;
-            creditors.set(ci, new Node(c.id(), c.name(), cLeft));
-            debtors.set(di, new Node(d.id(), d.name(), dLeft));
-            if (cLeft == 0) ci++;
-            if (dLeft == 0) di++;
         }
+        result.sort(Comparator.comparing(DebtDto::fromMemberName).thenComparing(DebtDto::toMemberName));
         return result;
+    }
+
+    private List<DebtDto> directDebts(List<ExpenseShare> shares, List<Settlement> settlements) {
+        List<DebtDto> obligations = new ArrayList<>();
+        for (ExpenseShare share : shares) {
+            Member debtor = share.getMember();
+            Member creditor = share.getExpense().getPaidBy();
+            if (!debtor.getId().equals(creditor.getId())) {
+                obligations.add(new DebtDto(debtor.getId(), debtor.getName(), creditor.getId(), creditor.getName(), money(share.getAmount())));
+            }
+        }
+
+        List<DebtDto> payments = settlements.stream()
+                .map(s -> new DebtDto(s.getFromMember().getId(), s.getFromMember().getName(),
+                        s.getToMember().getId(), s.getToMember().getName(), money(s.getAmount())))
+                .toList();
+        return netDirectDebts(obligations, payments);
     }
 
     private ExpenseDto expenseDto(Expense e) {
