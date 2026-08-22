@@ -181,3 +181,20 @@ html, body, body * {
   .manage-home-row { grid-template-columns:1fr; }
   .manage-home-delete { justify-self:end; }
 }
+
+.site-footer {
+  text-align: center;
+  padding: 28px 16px 34px;
+  font-size: 0.9rem;
+  color: #6f6b7a;
+}
+
+.site-footer a {
+  color: #6c63d9;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
